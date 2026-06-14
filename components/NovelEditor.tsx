@@ -9,6 +9,8 @@ import {
   Bot,
   ChevronUp,
   Plus,
+  Maximize2,
+  Minimize2,
   Palette,
   Globe,
   Eye as EyeIcon,
@@ -294,6 +296,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
   const [draftReady, setDraftReady] = useState(false)
   const [initialContent, setInitialContent] = useState<JSONContent>(EMPTY_DOCUMENT)
   const editorRef = useRef<EditorInstance | null>(null)
+  const editorShellRef = useRef<HTMLDivElement | null>(null)
   const mainScrollRef = useRef<HTMLElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const fileUploadRef = useRef<HTMLInputElement | null>(null)
@@ -325,6 +328,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
   const [publishPanelOpen, setPublishPanelOpen] = useState(false)
   const [wechatPublishOpen, setWechatPublishOpen] = useState(false)
   const [shareLongImageOpen, setShareLongImageOpen] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
   const [settingsModalOpen, setSettingsModalOpen] = useState(false)
   const [settingsActiveTab, setSettingsActiveTab] = useState<SettingsTabId>('nav')
   const [providerRefreshKey, setProviderRefreshKey] = useState(0)
@@ -509,6 +513,18 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
     syncRailLayout()
     window.addEventListener('resize', syncRailLayout)
     return () => window.removeEventListener('resize', syncRailLayout)
+  }, [])
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+
+    const handleFullscreenChange = () => {
+      setIsFullscreen(document.fullscreenElement === editorShellRef.current)
+    }
+
+    handleFullscreenChange()
+    document.addEventListener('fullscreenchange', handleFullscreenChange)
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
   // Persist rail preferences
@@ -1430,9 +1446,39 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
     aiPreferredWidth: aiRailWidth,
   })
 
+  const toggleBrowserFullscreen = useCallback(async () => {
+    if (typeof document === 'undefined') return
+
+    try {
+      if (document.fullscreenElement === editorShellRef.current) {
+        await document.exitFullscreen()
+        return
+      }
+
+      if (document.fullscreenElement) {
+        await document.exitFullscreen()
+      }
+
+      if (!editorShellRef.current?.requestFullscreen) {
+        toast.error('当前浏览器不支持全屏模式')
+        return
+      }
+
+      await editorShellRef.current.requestFullscreen()
+    } catch (error) {
+      console.error('Failed to toggle fullscreen', error)
+      toast.error('进入全屏失败，请检查浏览器权限')
+    }
+  }, [toast])
+
   return (
-    <div className="backoffice-shell editor-shell flex h-[100dvh] flex-col overflow-hidden bg-[var(--ui-bg)] text-[var(--ui-ink)]">
+    <div
+      ref={editorShellRef}
+      data-editor-fullscreen={isFullscreen ? 'true' : 'false'}
+      className="backoffice-shell editor-shell relative flex h-[100dvh] flex-col overflow-hidden bg-[var(--ui-bg)] text-[var(--ui-ink)]"
+    >
       {/* ── Sticky Header ── */}
+      {!isFullscreen ? (
       <header className="z-40 shrink-0 border-b border-[var(--ui-line)] bg-[color-mix(in_srgb,var(--ui-bg)_92%,transparent)] backdrop-blur-lg">
         <div className="flex min-h-14 items-center gap-3 px-4 py-2">
           <Tooltip content={railLayout.tocVisible ? '收起目录' : '展开目录'}>
@@ -1494,6 +1540,16 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
 
           {/* Right: Actions */}
           <div className="flex items-center gap-1">
+            <Tooltip content="进入全屏">
+              <UiIconButton
+                onClick={() => void toggleBrowserFullscreen()}
+                aria-label="进入全屏"
+                className="h-10 w-10"
+              >
+                <Maximize2 className="h-[1.05rem] w-[1.05rem]" />
+              </UiIconButton>
+            </Tooltip>
+
             <Menu as="div" className="relative">
               <Tooltip content={`公众号样式 · ${activeWechatStyle.label}`}>
                 <MenuButton
@@ -1744,6 +1800,23 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
         </div>
 
       </header>
+      ) : null}
+
+      {isFullscreen ? (
+        <div className="pointer-events-none absolute right-4 top-4 z-50">
+          <div className="pointer-events-auto">
+            <Tooltip content="退出全屏">
+              <UiIconButton
+                onClick={() => void toggleBrowserFullscreen()}
+                aria-label="退出全屏"
+                className="h-10 w-10 bg-[color-mix(in_srgb,var(--ui-bg)_84%,transparent)] shadow-[0_12px_30px_rgb(var(--ui-shadow-rgb)/0.12)] backdrop-blur-md"
+              >
+                <Minimize2 className="h-[1.05rem] w-[1.05rem]" />
+              </UiIconButton>
+            </Tooltip>
+          </div>
+        </div>
+      ) : null}
 
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { void handleSelectedFiles(e.target.files) }} />
@@ -1752,25 +1825,32 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
 
       {/* ── Main layout: editor + sidebar ── */}
       <div className="relative flex-1 overflow-hidden">
-        <EditorTocRail
-          open={railLayout.tocVisible}
-          editor={editorRef.current}
-          documentJson={currentDocumentJson}
-          scrollContainer={mainScrollRef.current}
-          activeSlug={editSlug || slug || null}
-          mode={leftRailMode}
-        />
+        {!isFullscreen ? (
+          <EditorTocRail
+            open={railLayout.tocVisible}
+            editor={editorRef.current}
+            documentJson={currentDocumentJson}
+            scrollContainer={mainScrollRef.current}
+            activeSlug={editSlug || slug || null}
+            mode={leftRailMode}
+          />
+        ) : null}
 
         {/* Main editor area */}
         <main
           ref={mainScrollRef}
           className="editor-scroll-shell relative h-full min-w-0 overflow-y-auto overflow-x-hidden transition-[padding] duration-200 ease-out"
           style={{
-            paddingLeft: railLayout.leftInset,
-            paddingRight: railLayout.rightInset,
+            paddingLeft: isFullscreen ? 0 : railLayout.leftInset,
+            paddingRight: isFullscreen ? 0 : railLayout.rightInset,
           }}
         >
-          <div className="mx-auto w-full max-w-[780px] px-4 pb-8 pt-10 sm:px-6">
+          <div
+            className={cx(
+              'mx-auto w-full px-4 pb-8 sm:px-6',
+              isFullscreen ? 'max-w-[960px] pt-14 sm:pt-16' : 'max-w-[780px] pt-10',
+            )}
+          >
             {/* Title input */}
             <div
               className="relative pb-4"
@@ -1988,107 +2068,109 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
             </div>
           </div>
         </main>
-        <EditorRightRail
-          open={railLayout.aiVisible}
-          onClose={() => setAiRailOpen(false)}
-          width={railLayout.aiWidth}
-          onWidthChange={setAiRailWidth}
-          headerAccessory={(
-            <>
-              <Tooltip content="复制公众号格式">
-                <UiIconButton
-                  tone="quiet"
-                  onClick={() => void handleCopyWechat()}
-                  aria-label="复制公众号格式"
-                  className="h-10 w-10 opacity-78"
-                >
-                  <Copy className="h-[1.05rem] w-[1.05rem]" />
-                </UiIconButton>
-              </Tooltip>
+        {!isFullscreen ? (
+          <EditorRightRail
+            open={railLayout.aiVisible}
+            onClose={() => setAiRailOpen(false)}
+            width={railLayout.aiWidth}
+            onWidthChange={setAiRailWidth}
+            headerAccessory={(
+              <>
+                <Tooltip content="复制公众号格式">
+                  <UiIconButton
+                    tone="quiet"
+                    onClick={() => void handleCopyWechat()}
+                    aria-label="复制公众号格式"
+                    className="h-10 w-10 opacity-78"
+                  >
+                    <Copy className="h-[1.05rem] w-[1.05rem]" />
+                  </UiIconButton>
+                </Tooltip>
 
-              <Tooltip content={rightRailMode === 'chat' ? '公众号预览' : 'AI 对话'}>
-                <UiIconButton
-                  tone="quiet"
-                  onClick={() => {
-                    if (rightRailMode === 'chat') {
-                      if (!hasWechatPreviewContent) return
-                      setRightRailMode('wechat-preview')
-                      return
-                    }
+                <Tooltip content={rightRailMode === 'chat' ? '公众号预览' : 'AI 对话'}>
+                  <UiIconButton
+                    tone="quiet"
+                    onClick={() => {
+                      if (rightRailMode === 'chat') {
+                        if (!hasWechatPreviewContent) return
+                        setRightRailMode('wechat-preview')
+                        return
+                      }
 
-                    setRightRailMode('chat')
-                  }}
-                  disabled={rightRailMode === 'chat' && !hasWechatPreviewContent}
-                  aria-label={rightRailMode === 'chat' ? '公众号预览' : 'AI 对话'}
-                  className="h-10 w-10 opacity-78"
-                >
-                  {rightRailMode === 'chat'
-                    ? <Smartphone className="h-[1.05rem] w-[1.05rem]" />
-                    : <Bot className="h-[1.05rem] w-[1.05rem]" />}
-                </UiIconButton>
-              </Tooltip>
-            </>
-          )}
-          aiContent={railLayout.aiVisible ? (
-            <div className="flex h-full min-h-0 flex-col">
-              <div className="relative min-h-0 flex-1 overflow-hidden">
-                <div
-                  className={cx(
-                    'absolute inset-0 transition-all duration-180 ease-out',
-                    rightRailMode === 'chat'
-                      ? 'translate-x-0 opacity-100'
-                      : '-translate-x-2 pointer-events-none opacity-0',
-                  )}
-                >
-                  <AIPanel
-                    articleKey={articleKey}
-                    postSlug={editSlug || normalizePostSlug(slug) || null}
-                    title={title}
-                    editor={editorRef.current}
-                    documentJson={currentDocumentJson}
-                    documentText={currentDocumentText}
-                    onOpenSettingsTab={(tabId) => void openSettingsModal(tabId)}
-                    profilesRefreshKey={providerRefreshKey}
-                    onTitleApply={(nextTitle) => {
-                      latestTitleRef.current = nextTitle
-                      setTitle(nextTitle)
-                      markDirty()
+                      setRightRailMode('chat')
                     }}
-                    onCoverImageApply={(imageUrl) => {
-                      setCoverImage(imageUrl)
-                      markDirty({ coverImage: imageUrl })
-                    }}
-                    onOpenPost={(targetSlug) => {
-                      const nextUrl = `/editor?edit=${encodeURIComponent(targetSlug)}`
-                      window.open(nextUrl, '_blank', 'noopener,noreferrer')
-                    }}
-                  />
-                </div>
-
-                <div
-                  className={cx(
-                    'absolute inset-0 transition-all duration-180 ease-out',
-                    rightRailMode === 'wechat-preview'
-                      ? 'translate-x-0 opacity-100'
-                      : 'translate-x-2 pointer-events-none opacity-0',
-                  )}
-                >
-                  {hasWechatPreviewContent ? (
-                    <WechatPreviewRail
-                      title={title.trim() || '无标题'}
-                      html={editorRef.current?.getHTML() || ''}
-                      stylePreset={wechatStylePreset}
+                    disabled={rightRailMode === 'chat' && !hasWechatPreviewContent}
+                    aria-label={rightRailMode === 'chat' ? '公众号预览' : 'AI 对话'}
+                    className="h-10 w-10 opacity-78"
+                  >
+                    {rightRailMode === 'chat'
+                      ? <Smartphone className="h-[1.05rem] w-[1.05rem]" />
+                      : <Bot className="h-[1.05rem] w-[1.05rem]" />}
+                  </UiIconButton>
+                </Tooltip>
+              </>
+            )}
+            aiContent={railLayout.aiVisible ? (
+              <div className="flex h-full min-h-0 flex-col">
+                <div className="relative min-h-0 flex-1 overflow-hidden">
+                  <div
+                    className={cx(
+                      'absolute inset-0 transition-all duration-180 ease-out',
+                      rightRailMode === 'chat'
+                        ? 'translate-x-0 opacity-100'
+                        : '-translate-x-2 pointer-events-none opacity-0',
+                    )}
+                  >
+                    <AIPanel
+                      articleKey={articleKey}
+                      postSlug={editSlug || normalizePostSlug(slug) || null}
+                      title={title}
+                      editor={editorRef.current}
+                      documentJson={currentDocumentJson}
+                      documentText={currentDocumentText}
+                      onOpenSettingsTab={(tabId) => void openSettingsModal(tabId)}
+                      profilesRefreshKey={providerRefreshKey}
+                      onTitleApply={(nextTitle) => {
+                        latestTitleRef.current = nextTitle
+                        setTitle(nextTitle)
+                        markDirty()
+                      }}
+                      onCoverImageApply={(imageUrl) => {
+                        setCoverImage(imageUrl)
+                        markDirty({ coverImage: imageUrl })
+                      }}
+                      onOpenPost={(targetSlug) => {
+                        const nextUrl = `/editor?edit=${encodeURIComponent(targetSlug)}`
+                        window.open(nextUrl, '_blank', 'noopener,noreferrer')
+                      }}
                     />
-                  ) : (
-                    <div className="flex h-full items-center justify-center px-5 text-center text-sm text-[var(--editor-muted)]">
-                      正文还是空的。
-                    </div>
-                  )}
+                  </div>
+
+                  <div
+                    className={cx(
+                      'absolute inset-0 transition-all duration-180 ease-out',
+                      rightRailMode === 'wechat-preview'
+                        ? 'translate-x-0 opacity-100'
+                        : 'translate-x-2 pointer-events-none opacity-0',
+                    )}
+                  >
+                    {hasWechatPreviewContent ? (
+                      <WechatPreviewRail
+                        title={title.trim() || '无标题'}
+                        html={editorRef.current?.getHTML() || ''}
+                        stylePreset={wechatStylePreset}
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center px-5 text-center text-sm text-[var(--editor-muted)]">
+                        正文还是空的。
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
-        />
+            ) : null}
+          />
+        ) : null}
       </div>
 
       {wechatPublishOpen ? (
