@@ -296,7 +296,6 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
   const [draftReady, setDraftReady] = useState(false)
   const [initialContent, setInitialContent] = useState<JSONContent>(EMPTY_DOCUMENT)
   const editorRef = useRef<EditorInstance | null>(null)
-  const editorShellRef = useRef<HTMLDivElement | null>(null)
   const mainScrollRef = useRef<HTMLElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const fileUploadRef = useRef<HTMLInputElement | null>(null)
@@ -513,18 +512,6 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
     syncRailLayout()
     window.addEventListener('resize', syncRailLayout)
     return () => window.removeEventListener('resize', syncRailLayout)
-  }, [])
-
-  useEffect(() => {
-    if (typeof document === 'undefined') return
-
-    const handleFullscreenChange = () => {
-      setIsFullscreen(document.fullscreenElement === editorShellRef.current)
-    }
-
-    handleFullscreenChange()
-    document.addEventListener('fullscreenchange', handleFullscreenChange)
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
   }, [])
 
   // Persist rail preferences
@@ -1447,33 +1434,11 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
   })
 
   const toggleBrowserFullscreen = useCallback(async () => {
-    if (typeof document === 'undefined') return
-
-    try {
-      if (document.fullscreenElement === editorShellRef.current) {
-        await document.exitFullscreen()
-        return
-      }
-
-      if (document.fullscreenElement) {
-        await document.exitFullscreen()
-      }
-
-      if (!editorShellRef.current?.requestFullscreen) {
-        toast.error('当前浏览器不支持全屏模式')
-        return
-      }
-
-      await editorShellRef.current.requestFullscreen()
-    } catch (error) {
-      console.error('Failed to toggle fullscreen', error)
-      toast.error('进入全屏失败，请检查浏览器权限')
-    }
-  }, [toast])
+    setIsFullscreen((current) => !current)
+  }, [])
 
   return (
     <div
-      ref={editorShellRef}
       data-editor-fullscreen={isFullscreen ? 'true' : 'false'}
       className="backoffice-shell editor-shell relative flex h-[100dvh] flex-col overflow-hidden bg-[var(--ui-bg)] text-[var(--ui-ink)]"
     >
@@ -1540,10 +1505,10 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
 
           {/* Right: Actions */}
           <div className="flex items-center gap-1">
-            <Tooltip content="进入全屏">
+            <Tooltip content="单页全屏">
               <UiIconButton
                 onClick={() => void toggleBrowserFullscreen()}
-                aria-label="进入全屏"
+                aria-label="单页全屏"
                 className="h-10 w-10"
               >
                 <Maximize2 className="h-[1.05rem] w-[1.05rem]" />
@@ -1808,7 +1773,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
             <Tooltip content="退出全屏">
               <UiIconButton
                 onClick={() => void toggleBrowserFullscreen()}
-                aria-label="退出全屏"
+                aria-label="退出单页全屏"
                 className="h-10 w-10 bg-[color-mix(in_srgb,var(--ui-bg)_84%,transparent)] shadow-[0_12px_30px_rgb(var(--ui-shadow-rgb)/0.12)] backdrop-blur-md"
               >
                 <Minimize2 className="h-[1.05rem] w-[1.05rem]" />
