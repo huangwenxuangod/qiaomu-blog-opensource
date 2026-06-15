@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import { Tabs } from '@/components/Tabs'
 import type { RuntimeCapabilities } from '@/lib/runtime-capabilities'
 import { normalizeTheme, type BodyFont, type Theme } from '@/lib/appearance'
+import type { TypographyPresetsConfig } from '@/lib/typography'
 import { NavLinksEditor } from './NavLinksEditor'
 import { CustomJsEditor } from './CustomJsEditor'
 import { RuntimeCapabilitiesPanel } from './RuntimeCapabilitiesPanel'
@@ -64,9 +65,11 @@ interface Props {
   initialDefaultTheme: string
   initialRuntimeCapabilities: RuntimeCapabilities
   initialHomeShortcutEnabled?: string
+  initialTypographyPresets?: string
   initialTab?: string
   selectedTab?: string
   onTabChange?: (tabId: string) => void
+  onTypographyPresetsChange?: (config: TypographyPresetsConfig) => void
 }
 
 export function SettingsManager({
@@ -77,9 +80,11 @@ export function SettingsManager({
   initialDefaultTheme,
   initialRuntimeCapabilities,
   initialHomeShortcutEnabled = 'true',
+  initialTypographyPresets = '',
   initialTab = 'nav',
   selectedTab,
   onTabChange,
+  onTypographyPresetsChange,
 }: Props) {
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState('')
@@ -108,14 +113,24 @@ export function SettingsManager({
     }
   }
 
-  const saveThemeSettings = async ({ theme, font }: { theme: Theme; font: BodyFont }) => {
+  const saveThemeSettings = async ({
+    theme,
+    font,
+    typographyPresets,
+  }: {
+    theme: Theme
+    font: BodyFont
+    typographyPresets: TypographyPresetsConfig
+  }) => {
     setSaving(true)
     setMsg('')
     try {
       await Promise.all([
         persistSetting('default_theme', theme),
         persistSetting('body_font', font),
+        persistSetting('typography_presets_v1', JSON.stringify(typographyPresets)),
       ])
+      onTypographyPresetsChange?.(typographyPresets)
       setMsg('已保存')
       setTimeout(() => setMsg(''), 2000)
     } catch (e) {
@@ -177,6 +192,7 @@ export function SettingsManager({
         <ThemeManager
           initialTheme={normalizeTheme(initialDefaultTheme)}
           initialFont={(initialBodyFont || 'default') as BodyFont}
+          initialTypographyPresets={initialTypographyPresets}
           onSave={saveThemeSettings}
           saving={saving}
         />

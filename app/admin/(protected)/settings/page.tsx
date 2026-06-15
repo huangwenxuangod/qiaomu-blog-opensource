@@ -15,6 +15,7 @@ export default async function SettingsPage() {
   let bodyFont = ''
   let defaultTheme = ''
   let homeShortcutEnabled = 'true'
+  let typographyPresets = ''
   let categories: Awaited<ReturnType<typeof getCategories>> = []
   let runtimeCapabilities = detectRuntimeCapabilities()
 
@@ -27,6 +28,7 @@ export default async function SettingsPage() {
       bodyFont = (await getSetting(env.DB, 'body_font')) || ''
       defaultTheme = (await getSetting(env.DB, 'default_theme')) || ''
       homeShortcutEnabled = (await getSetting(env.DB, 'home_shortcut_enabled')) || 'true'
+      typographyPresets = (await getSetting(env.DB, 'typography_presets_v1')) || ''
       categories = await getCategories(env.DB)
     }
   } catch {}
@@ -47,6 +49,7 @@ export default async function SettingsPage() {
         initialDefaultTheme={defaultTheme}
         initialRuntimeCapabilities={runtimeCapabilities}
         initialHomeShortcutEnabled={homeShortcutEnabled}
+        initialTypographyPresets={typographyPresets}
       />
     </div>
   )

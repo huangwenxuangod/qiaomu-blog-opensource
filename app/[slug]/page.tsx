@@ -16,6 +16,12 @@ import { getSiteUrl } from '@/lib/site-config'
 import { resolvePostCoverImage } from '@/lib/default-cover-images'
 import { incrementViewCount, getPostBySlug } from '@/lib/repositories/posts'
 import { isPubliclyAccessiblePost, isSearchIndexablePost } from '@/lib/repositories/types'
+import { getSetting } from '@/lib/repositories/settings'
+import {
+  buildTypographyStyleVariables,
+  normalizeTypographyPreset,
+  normalizeTypographyPresetsConfig,
+} from '@/lib/typography'
 
 // Cloudflare Workers 缓存策略
 export const revalidate = 86400 // 24小时缓存
@@ -101,6 +107,10 @@ export default async function PostPage({
   if (!post) notFound()
   if (!isPubliclyAccessiblePost(post)) notFound()
   const headerData = await getSiteHeaderData(db)
+  const typographyConfig = normalizeTypographyPresetsConfig(
+    await getSetting(db, 'typography_presets_v1'),
+  )
+  const typographyPreset = normalizeTypographyPreset(post.typography_preset)
   const resolvedTheme = resolveThemePreference(cookieStore.get(THEME_STORAGE_KEY)?.value, headerData.defaultTheme)
   const categorySlugMap = new Map(headerData.categories.map((category) => [category.name, category.slug]))
   const activeCategorySlug = headerData.categories.find((category) => category.name === post.category)?.slug ?? null
@@ -243,7 +253,11 @@ export default async function PostPage({
           viewCount={post.view_count}
           content={post.content}
         >
-          <article>
+          <article
+            className="article-typography"
+            data-typography-preset={typographyPreset}
+            style={buildTypographyStyleVariables(typographyConfig)}
+          >
             <header className="mb-10 sm:mb-12">
               <h1
                 data-admin-edit-trigger

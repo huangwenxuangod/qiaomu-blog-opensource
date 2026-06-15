@@ -15,6 +15,7 @@ import {
   serverErrorResponse,
   withRequestId,
 } from '@/lib/server/observability'
+import { normalizeTypographyPreset } from '@/lib/typography'
 
 export async function POST(req: NextRequest) {
   const requestId = createRequestId(req)
@@ -57,6 +58,7 @@ export async function POST(req: NextRequest) {
     const coverImage = typeof payload.cover_image === 'string' && payload.cover_image.trim()
       ? payload.cover_image.trim()
       : null
+    const typographyPreset = normalizeTypographyPreset(payload.typography_preset)
 
     if (!title || !content) {
       return serverErrorResponse({
@@ -111,6 +113,7 @@ export async function POST(req: NextRequest) {
       password,
       is_hidden,
       cover_image: coverImage,
+      typography_preset: typographyPreset,
     })
 
     // 6. 清除缓存
@@ -154,6 +157,7 @@ export async function POST(req: NextRequest) {
       tags,
       description,
       cover_image: coverImage,
+      typography_preset: typographyPreset,
     }), requestId)
   } catch (error) {
     if (error instanceof Error && /UNIQUE constraint failed: posts\.slug/i.test(error.message)) {
@@ -225,6 +229,9 @@ export async function PATCH(req: NextRequest) {
     if (payload.category !== undefined) updates.category = payload.category
     if (payload.tags !== undefined) updates.tags = payload.tags
     if (payload.cover_image !== undefined) updates.cover_image = payload.cover_image
+    if (payload.typography_preset !== undefined) {
+      updates.typography_preset = normalizeTypographyPreset(payload.typography_preset)
+    }
     if (payload.status === 'draft' || payload.status === 'published' || payload.status === 'deleted') {
       updates.status = payload.status
     }

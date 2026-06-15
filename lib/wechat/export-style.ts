@@ -1,4 +1,10 @@
 import type { WechatStylePresetId } from './style-presets'
+import {
+  buildTypographyPresetCss,
+  DEFAULT_TYPOGRAPHY_PRESETS,
+  type TypographyPresetId,
+  type TypographyPresetsConfig,
+} from '@/lib/typography'
 
 export interface WechatExportStyleTokens {
   background: string
@@ -31,6 +37,71 @@ export function normalizeWechatExportHtml(html: string) {
   return stripEditorOnlyBreaks(html)
     .replace(/<p(?:\s[^>]*)?>\s*(?:<br\b[^>]*>)?\s*<\/p>/gi, '<p data-wechat-empty="true">&nbsp;</p>')
     .replace(/<p(?![^>]*data-wechat-empty="true")([^>]*)>\s*&nbsp;\s*<\/p>/gi, '<p$1 data-wechat-empty="true">&nbsp;</p>')
+}
+
+function buildArticleTypographyCss(
+  tokens: WechatExportStyleTokens,
+  preset: TypographyPresetId,
+  config: TypographyPresetsConfig,
+) {
+  const active = config[preset]
+  return `
+.wechat-export-article {
+  padding: 0 8px;
+}
+
+.wechat-export-title {
+  margin: 0 0 ${active.paragraphSpacing}em;
+  color: ${tokens.articleHeadingColor};
+  font-family: ${tokens.titleFontFamily};
+  font-size: ${Math.max(active.fontSize + 3, 20)}px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: ${active.letterSpacing}em;
+}
+
+.wechat-export-content {
+  color: ${tokens.articleBodyColor};
+  font-family: ${tokens.bodyFontFamily};
+  font-size: ${active.fontSize}px;
+  line-height: ${active.lineHeight};
+  letter-spacing: ${active.letterSpacing}em;
+}
+
+.wechat-export-content h1,
+.wechat-export-content h2,
+.wechat-export-content h3,
+.wechat-export-content h4,
+.wechat-export-content h5,
+.wechat-export-content h6 {
+  margin: 1.9em 0 0.8em;
+  color: ${tokens.articleHeadingColor};
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.wechat-export-content h1 { font-size: 1.4rem; }
+.wechat-export-content h2 { font-size: 1.24rem; }
+.wechat-export-content h3 { font-size: 1.12rem; }
+.wechat-export-content h4,
+.wechat-export-content h5,
+.wechat-export-content h6 { font-size: 1rem; }
+
+.wechat-export-content p {
+  margin: ${active.paragraphSpacing}em 0;
+  color: inherit;
+}
+
+.wechat-export-content blockquote {
+  margin: ${active.paragraphSpacing}em 0;
+  padding: 0.2em 0 0.2em 1em;
+  border-left: 3px solid ${tokens.articleQuoteBorderColor};
+  background: transparent;
+  color: ${tokens.articleQuoteColor};
+}
+
+${buildTypographyPresetCss('.wechat-export-content', config)}
+`.trim()
 }
 
 function buildPresetCss(tokens: WechatExportStyleTokens, preset: WechatStylePresetId) {
@@ -337,7 +408,11 @@ function buildPresetCss(tokens: WechatExportStyleTokens, preset: WechatStylePres
   }
 }
 
-export function buildWechatExportCss(tokens: WechatExportStyleTokens, preset: WechatStylePresetId = 'default') {
+export function buildWechatExportCss(
+  tokens: WechatExportStyleTokens,
+  preset: TypographyPresetId = 'standard',
+  config: TypographyPresetsConfig = DEFAULT_TYPOGRAPHY_PRESETS,
+) {
   return `
 .wechat-export-root {
   color: ${tokens.articleBodyColor};
@@ -369,7 +444,7 @@ export function buildWechatExportCss(tokens: WechatExportStyleTokens, preset: We
   margin-bottom: 0;
 }
 
-${buildPresetCss(tokens, preset)}
+${buildArticleTypographyCss(tokens, preset, config)}
 
 .wechat-export-title,
 .wechat-export-content h1,

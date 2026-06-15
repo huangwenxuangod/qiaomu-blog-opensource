@@ -33,6 +33,7 @@ import AutoJoiner from 'tiptap-extension-auto-joiner'
 import { Markdown } from 'tiptap-markdown'
 import { DOMParser as PMDOMParser } from '@tiptap/pm/model'
 import type { EditorView } from '@tiptap/pm/view'
+import { Extension } from '@tiptap/core'
 import markdownit from 'markdown-it'
 import { useEffect, useState } from 'react'
 import {
@@ -78,6 +79,33 @@ import {
 import { shouldShowEditorBubble } from './editor-bubble'
 import { createDefaultTableContent, hasMarkdownTable, normalizeUrl } from './editor-utils'
 import { Tooltip } from '@/components/ui/Tooltip'
+import { normalizeTypographyPreset } from '@/lib/typography'
+
+const ArticleTypography = Extension.create({
+  name: 'articleTypography',
+  addGlobalAttributes() {
+    return [
+      {
+        types: ['paragraph', 'heading'],
+        attributes: {
+          typographyPreset: {
+            default: null,
+            parseHTML: (element) => {
+              const value = element.getAttribute('data-typography-preset')
+              return value ? normalizeTypographyPreset(value) : null
+            },
+            renderHTML: (attributes) => {
+              if (!attributes.typographyPreset) return {}
+              return {
+                'data-typography-preset': normalizeTypographyPreset(attributes.typographyPreset),
+              }
+            },
+          },
+        },
+      },
+    ]
+  },
+})
 
 const md = markdownit({ html: true })
 
@@ -413,6 +441,7 @@ export interface EditorExtensionOptions {
 export function createEditorExtensions(options: EditorExtensionOptions = {}) {
   return [
     StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
+    ArticleTypography,
     TextStyle,
     Color,
     HighlightExtension,

@@ -12,6 +12,7 @@ export interface Post {
   is_pinned: number
   is_hidden: number
   cover_image: string | null
+  typography_preset: string
   deleted_at: number | null
   published_at: number
   updated_at: number

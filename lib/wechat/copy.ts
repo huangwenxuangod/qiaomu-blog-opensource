@@ -2,7 +2,11 @@
 
 import { saveBlobFile } from '@/lib/client-download'
 import { buildWechatExportCss, normalizeWechatExportHtml, type WechatExportStyleTokens } from './export-style'
-import type { WechatStylePresetId } from './style-presets'
+import {
+  DEFAULT_TYPOGRAPHY_PRESETS,
+  type TypographyPresetId,
+  type TypographyPresetsConfig,
+} from '@/lib/typography'
 import type { IParagraphOptions, ParagraphChild } from 'docx'
 
 type ExportMode = 'clipboard' | 'pdf'
@@ -295,10 +299,15 @@ function createStageRoot(title: string, html: string, css: string) {
   return stage
 }
 
-async function prepareArticleExportStage(title: string, html: string, preset: WechatStylePresetId = 'default') {
+async function prepareArticleExportStage(
+  title: string,
+  html: string,
+  preset: TypographyPresetId = 'standard',
+  config: TypographyPresetsConfig = DEFAULT_TYPOGRAPHY_PRESETS,
+) {
   const normalizedTitle = title.trim() || '无标题'
   const normalizedHtml = normalizeExportMarkup(html, 'pdf')
-  const css = buildWechatExportCss(readWechatExportStyleTokens(), preset)
+  const css = buildWechatExportCss(readWechatExportStyleTokens(), preset, config)
   const stage = createStageRoot(normalizedTitle, normalizedHtml, css)
   const article = stage.querySelector('.wechat-export-article')
 
@@ -317,10 +326,15 @@ async function prepareArticleExportStage(title: string, html: string, preset: We
   }
 }
 
-async function buildWechatClipboardHtml(title: string, html: string, preset: WechatStylePresetId = 'default') {
+async function buildWechatClipboardHtml(
+  title: string,
+  html: string,
+  preset: TypographyPresetId = 'standard',
+  config: TypographyPresetsConfig = DEFAULT_TYPOGRAPHY_PRESETS,
+) {
   const normalizedTitle = title.trim() || '无标题'
   const normalizedHtml = normalizeExportMarkup(html, 'clipboard')
-  const css = buildWechatExportCss(readWechatExportStyleTokens(), preset)
+  const css = buildWechatExportCss(readWechatExportStyleTokens(), preset, config)
   const fragment = buildWechatExportFragment(normalizedTitle, normalizedHtml)
 
   const juice = (await import('juice')).default
@@ -812,13 +826,14 @@ function rewriteBridgeArticleHtml(exportedHtml: string) {
 export async function buildWechatBridgeArticleExport(
   title: string,
   html: string,
-  preset: WechatStylePresetId = 'default',
+  preset: TypographyPresetId = 'standard',
+  config: TypographyPresetsConfig = DEFAULT_TYPOGRAPHY_PRESETS,
 ) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error('当前环境不支持公众号发布导出')
   }
 
-  const { exportedHtml, normalizedTitle } = await buildWechatClipboardHtml(title, html, preset)
+  const { exportedHtml, normalizedTitle } = await buildWechatClipboardHtml(title, html, preset, config)
 
   return {
     normalizedTitle,
@@ -829,7 +844,8 @@ export async function buildWechatBridgeArticleExport(
 export function buildWechatPreviewHtml(
   title: string,
   html: string,
-  preset: WechatStylePresetId = 'default',
+  preset: TypographyPresetId = 'standard',
+  config: TypographyPresetsConfig = DEFAULT_TYPOGRAPHY_PRESETS,
 ) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error('当前环境不支持公众号预览')
@@ -837,7 +853,7 @@ export function buildWechatPreviewHtml(
 
   const normalizedTitle = title.trim() || '无标题'
   const normalizedHtml = normalizeExportMarkup(html, 'clipboard')
-  const css = buildWechatExportCss(readWechatPreviewStyleTokens(), preset)
+  const css = buildWechatExportCss(readWechatPreviewStyleTokens(), preset, config)
   const fragment = buildWechatExportFragment(normalizedTitle, normalizedHtml)
 
   return `<!doctype html>
@@ -965,13 +981,14 @@ async function writeClipboardHtml(html: string, plainText: string) {
 export async function copyAsWechatArticleFormat(
   title: string,
   html: string,
-  preset: WechatStylePresetId = 'default',
+  preset: TypographyPresetId = 'standard',
+  config: TypographyPresetsConfig = DEFAULT_TYPOGRAPHY_PRESETS,
 ) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error('当前环境不支持复制')
   }
 
-  const { exportedHtml, normalizedTitle } = await buildWechatClipboardHtml(title, html, preset)
+  const { exportedHtml, normalizedTitle } = await buildWechatClipboardHtml(title, html, preset, config)
   const plainText = new DOMParser()
     .parseFromString(exportedHtml, 'text/html')
     .body.textContent?.trim() || normalizedTitle
@@ -982,7 +999,8 @@ export async function copyAsWechatArticleFormat(
 export async function downloadArticleAsPdf(
   title: string,
   html: string,
-  preset: WechatStylePresetId = 'default',
+  preset: TypographyPresetId = 'standard',
+  config: TypographyPresetsConfig = DEFAULT_TYPOGRAPHY_PRESETS,
 ) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error('当前环境不支持导出 PDF')
@@ -997,7 +1015,7 @@ export async function downloadArticleAsPdf(
     | undefined
 
   try {
-    prepared = await prepareArticleExportStage(title, html, preset)
+    prepared = await prepareArticleExportStage(title, html, preset, config)
     const html2pdf = (await import('html2pdf.js')).default as Html2PdfFactory
     const pdfOptions = {
       margin: [16, 12, 16, 12],
@@ -1043,7 +1061,8 @@ export async function downloadArticleAsPdf(
 export async function downloadArticleAsDocx(
   title: string,
   html: string,
-  preset: WechatStylePresetId = 'default',
+  preset: TypographyPresetId = 'standard',
+  config: TypographyPresetsConfig = DEFAULT_TYPOGRAPHY_PRESETS,
 ) {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error('当前环境不支持导出 DOCX')
@@ -1051,7 +1070,7 @@ export async function downloadArticleAsDocx(
 
   const normalizedTitle = title.trim() || '无标题'
   const normalizedHtml = normalizeExportMarkup(html, 'clipboard')
-  const css = buildWechatExportCss(readWechatExportStyleTokens(), preset)
+  const css = buildWechatExportCss(readWechatExportStyleTokens(), preset, config)
   const fragment = buildWechatExportFragment(normalizedTitle, normalizedHtml)
   const exportedHtml = `<!doctype html>
 <html lang="zh-CN">

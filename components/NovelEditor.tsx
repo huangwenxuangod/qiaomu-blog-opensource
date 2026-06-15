@@ -11,7 +11,7 @@ import {
   Plus,
   Maximize2,
   Minimize2,
-  Palette,
+  SlidersHorizontal,
   Globe,
   Eye as EyeIcon,
   Lock,
@@ -90,11 +90,14 @@ import {
 import type { RuntimeCapabilities } from '@/lib/runtime-capabilities'
 import { resolveEditorRailLayout } from '@/lib/editor-responsive-layout'
 import {
-  normalizeWechatStylePreset,
-  WECHAT_STYLE_PRESET_OPTIONS,
-  WECHAT_STYLE_STORAGE_KEY,
-  type WechatStylePresetId,
-} from '@/lib/wechat/style-presets'
+  buildTypographyStyleVariables,
+  DEFAULT_TYPOGRAPHY_PRESETS,
+  normalizeTypographyPreset,
+  normalizeTypographyPresetsConfig,
+  TYPOGRAPHY_PRESET_OPTIONS,
+  type TypographyPresetId,
+  type TypographyPresetsConfig,
+} from '@/lib/typography'
 
 type PublishStatus = 'public' | 'draft' | 'encrypted' | 'unlisted'
 type SaveState = 'saved' | 'dirty' | 'saving' | 'error'
@@ -182,6 +185,27 @@ function relativeTime(ts: number): string {
   return `${Math.floor(diff / 3600)}小时前`
 }
 
+function applyTypographyPresetToCurrentBlock(
+  editor: EditorInstance,
+  preset: TypographyPresetId,
+) {
+  const { $from } = editor.state.selection
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth)
+    if (node.type.name !== 'paragraph' && node.type.name !== 'heading') continue
+
+    const position = $from.before(depth)
+    const transaction = editor.state.tr.setNodeMarkup(position, undefined, {
+      ...node.attrs,
+      typographyPreset: preset,
+    })
+    editor.view.dispatch(transaction)
+    editor.commands.focus()
+    return true
+  }
+  return false
+}
+
 interface NovelEditorProps {
   initialData?: {
     slug: string
@@ -194,6 +218,7 @@ interface NovelEditorProps {
     tags?: string[]
     description?: string | null
     cover_image?: string | null
+    typography_preset?: string
   }
   initialCategory?: string
 }
@@ -205,6 +230,7 @@ type DraftMetaState = {
   tags: string[]
   description: string
   coverImage: string
+  typographyPreset: TypographyPresetId
 }
 
 type RightRailMode = 'chat' | 'wechat-preview'
@@ -235,11 +261,13 @@ type SettingsTabId =
 function WechatPreviewRail({
   title,
   html,
-  stylePreset,
+  typographyPreset,
+  typographyConfig,
 }: {
   title: string
   html: string
-  stylePreset: WechatStylePresetId
+  typographyPreset: TypographyPresetId
+  typographyConfig: TypographyPresetsConfig
 }) {
   const [previewHtml, setPreviewHtml] = useState('')
   const [loading, setLoading] = useState(false)
@@ -251,14 +279,14 @@ function WechatPreviewRail({
 
     try {
       const { buildWechatPreviewHtml } = await import('@/lib/wechat/copy')
-      setPreviewHtml(buildWechatPreviewHtml(title, html, stylePreset))
+      setPreviewHtml(buildWechatPreviewHtml(title, html, typographyPreset, typographyConfig))
     } catch (buildError) {
       setPreviewHtml('')
       setError(buildError instanceof Error ? buildError.message : '生成公众号预览失败')
     } finally {
       setLoading(false)
     }
-  }, [html, stylePreset, title])
+  }, [html, title, typographyConfig, typographyPreset])
 
   useEffect(() => {
     void buildPreview()
@@ -315,6 +343,12 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
   const [description, setDescription] = useState(initialData?.description || '')
   const [coverImage, setCoverImage] = useState(initialData?.cover_image || '')
   const [slug, setSlug] = useState(initialData?.slug || '')
+  const [typographyPreset, setTypographyPreset] = useState<TypographyPresetId>(
+    normalizeTypographyPreset(initialData?.typography_preset),
+  )
+  const [typographyConfig, setTypographyConfig] = useState<TypographyPresetsConfig>(
+    DEFAULT_TYPOGRAPHY_PRESETS,
+  )
 
   // ── UI state ──
   const [tocOpen, setTocOpen] = useState(true)
@@ -323,7 +357,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
   const [aiRailWidth, setAiRailWidth] = useState(DEFAULT_AI_RAIL_WIDTH)
   const [viewportWidth, setViewportWidth] = useState(0)
   const [rightRailMode, setRightRailMode] = useState<RightRailMode>('chat')
-  const [wechatStylePreset, setWechatStylePreset] = useState<WechatStylePresetId>('default')
+  const [typographyScope, setTypographyScope] = useState<'article' | 'block'>('article')
   const [publishPanelOpen, setPublishPanelOpen] = useState(false)
   const [wechatPublishOpen, setWechatPublishOpen] = useState(false)
   const [shareLongImageOpen, setShareLongImageOpen] = useState(false)
@@ -342,6 +376,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
     defaultTheme: string
     runtimeCapabilities: RuntimeCapabilities
     homeShortcutEnabled: string
+    typographyPresets: string
   } | null>(null)
 
   useEffect(() => {
@@ -351,6 +386,15 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
         if (data && data.value !== undefined) {
           setHomeShortcutEnabled(data.value === 'true')
         }
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/admin/settings?key=typography_presets_v1')
+      .then((res) => res.json())
+      .then((data: { value?: string | null }) => {
+        setTypographyConfig(normalizeTypographyPresetsConfig(data.value))
       })
       .catch(() => {})
   }, [])
@@ -391,6 +435,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
         bodyFont: settingsJson.body_font || '',
         defaultTheme: settingsJson.default_theme || '',
         homeShortcutEnabled: settingsJson.home_shortcut_enabled || 'true',
+        typographyPresets: settingsJson.typography_presets_v1 || '',
         runtimeCapabilities: {
           bindings: {
             d1: true,
@@ -471,6 +516,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
     tags: initialData?.tags || [],
     description: initialData?.description || '',
     coverImage: initialData?.cover_image || '',
+    typographyPreset: normalizeTypographyPreset(initialData?.typography_preset),
   })
 
   // ── Init ──
@@ -494,7 +540,6 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
       setLeftRailMode(storedLeftRailMode === 'articles' ? 'articles' : 'toc')
       const storedAiRail = window.localStorage.getItem(AI_RAIL_KEY)
       setAiRailOpen(storedAiRail === null ? true : storedAiRail === 'true')
-      setWechatStylePreset(normalizeWechatStylePreset(window.localStorage.getItem(WECHAT_STYLE_STORAGE_KEY)))
       const storedAiRailWidth = Number(window.localStorage.getItem(AI_RAIL_WIDTH_KEY) || '')
       if (Number.isFinite(storedAiRailWidth) && storedAiRailWidth > 0) {
         setAiRailWidth(Math.min(MAX_AI_RAIL_WIDTH, Math.max(MIN_AI_RAIL_WIDTH, storedAiRailWidth)))
@@ -521,9 +566,8 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
       window.localStorage.setItem(LEFT_RAIL_MODE_KEY, leftRailMode)
       window.localStorage.setItem(AI_RAIL_KEY, String(aiRailOpen))
       window.localStorage.setItem(AI_RAIL_WIDTH_KEY, String(aiRailWidth))
-      window.localStorage.setItem(WECHAT_STYLE_STORAGE_KEY, wechatStylePreset)
     }
-  }, [aiRailOpen, aiRailWidth, leftRailMode, tocOpen, wechatStylePreset])
+  }, [aiRailOpen, aiRailWidth, leftRailMode, tocOpen])
 
   useEffect(() => {
     latestMetaRef.current = {
@@ -533,8 +577,9 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
       tags,
       description,
       coverImage,
+      typographyPreset,
     }
-  }, [editSlug, slug, category, tags, description, coverImage])
+  }, [editSlug, slug, category, tags, description, coverImage, typographyPreset])
 
   const buildAutosaveSnapshot = useCallback((payload: {
     currentSlug: string | null
@@ -545,6 +590,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
     category: string
     tags: string[]
     coverImage: string
+    typographyPreset: TypographyPresetId
   }) => {
     return JSON.stringify({
       currentSlug: payload.currentSlug,
@@ -555,6 +601,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
       category: payload.category,
       tags: payload.tags,
       coverImage: payload.coverImage,
+      typographyPreset: payload.typographyPreset,
     })
   }, [])
 
@@ -589,6 +636,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
           category: initialData.category || 'AI',
           tags: initialData.tags || [],
           coverImage: initialData.cover_image || '',
+          typographyPreset: normalizeTypographyPreset(initialData.typography_preset),
         })
       : null
     setSaveState('saved')
@@ -609,6 +657,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
           category: initialData.category || 'AI',
           tags: initialData.tags || [],
           coverImage: initialData.cover_image || '',
+          typographyPreset: normalizeTypographyPreset(initialData.typography_preset),
         })
       : null
     setSaveState('saved')
@@ -796,7 +845,15 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
   ) => {
     if (typeof window === 'undefined' || !draftReady || !editor) return
 
-    const { editSlug: currentSlug, slug: nextSlugRaw, category, tags, description, coverImage } = latestMetaRef.current
+    const {
+      editSlug: currentSlug,
+      slug: nextSlugRaw,
+      category,
+      tags,
+      description,
+      coverImage,
+      typographyPreset: currentTypographyPreset,
+    } = latestMetaRef.current
     if (activeDocumentSlugRef.current !== currentSlug) return
 
     const nextSlug = normalizePostSlug(nextSlugRaw)
@@ -822,6 +879,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
       category,
       tags,
       coverImage,
+      typographyPreset: currentTypographyPreset,
     })
 
     if (snapshot === lastAutosaveSnapshotRef.current) {
@@ -853,6 +911,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
             category,
             tags,
             cover_image: coverImage,
+            typography_preset: currentTypographyPreset,
           }),
           signal: controller.signal,
         })
@@ -881,6 +940,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
             tags,
             description: normalizedDescription,
             cover_image: coverImage,
+            typography_preset: currentTypographyPreset,
           }),
           signal: controller.signal,
         })
@@ -1186,6 +1246,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
           title: normalizedTitle, content, html, category,
           ...statusFields,
           tags, description: normalizedDescription, cover_image: coverImage || null,
+          typography_preset: typographyPreset,
         }),
       })
       const result = (await response.json()) as {
@@ -1207,6 +1268,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
         category,
         tags,
         coverImage,
+        typographyPreset,
       })
       lastAutosaveSnapshotRef.current = snapshot
 
@@ -1261,12 +1323,12 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
 
     try {
       const { copyAsWechatArticleFormat } = await import('@/lib/wechat/copy')
-      await copyAsWechatArticleFormat(normalizedTitle, html, wechatStylePreset)
+      await copyAsWechatArticleFormat(normalizedTitle, html, typographyPreset, typographyConfig)
       toast.success('已复制公众号格式')
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '复制公众号格式失败')
     }
-  }, [title, toast, wechatStylePreset])
+  }, [title, toast, typographyConfig, typographyPreset])
 
   const handleDownloadPdf = useCallback(async () => {
     const editor = editorRef.current
@@ -1288,11 +1350,11 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
 
     try {
       const { downloadArticleAsPdf } = await import('@/lib/wechat/copy')
-      await downloadArticleAsPdf(normalizedTitle, html, wechatStylePreset)
+      await downloadArticleAsPdf(normalizedTitle, html, typographyPreset, typographyConfig)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '导出 PDF 失败')
     }
-  }, [title, toast, wechatStylePreset])
+  }, [title, toast, typographyConfig, typographyPreset])
 
   const handleDownloadMarkdown = useCallback(async () => {
     const editor = editorRef.current
@@ -1357,11 +1419,11 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
 
     try {
       const { downloadArticleAsDocx } = await import('@/lib/wechat/copy')
-      await downloadArticleAsDocx(normalizedTitle, html, wechatStylePreset)
+      await downloadArticleAsDocx(normalizedTitle, html, typographyPreset, typographyConfig)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '导出 DOCX 失败')
     }
-  }, [title, toast, wechatStylePreset])
+  }, [title, toast, typographyConfig, typographyPreset])
 
   const handleOpenWechatPublish = () => {
     const editor = editorRef.current
@@ -1382,6 +1444,19 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
 
     setWechatPublishOpen(true)
   }
+
+  const handleTypographyPresetChange = useCallback((preset: TypographyPresetId) => {
+    if (typographyScope === 'article') {
+      setTypographyPreset(preset)
+      markDirty({ typographyPreset: preset })
+      return
+    }
+
+    const editor = editorRef.current
+    if (!editor || !applyTypographyPresetToCurrentBlock(editor, preset)) {
+      toast.warning('请先把光标放在正文段落或标题中')
+    }
+  }, [markDirty, toast, typographyScope])
 
   // ── Auto resize title ──
   const autoResizeTitle = (el: HTMLTextAreaElement) => {
@@ -1419,8 +1494,12 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
   const hasWechatPreviewContent = Boolean(
     currentDocumentText || /<(img|video|audio|iframe)\s/i.test(editorRef.current?.getHTML() || ''),
   )
-  const activeWechatStyle = WECHAT_STYLE_PRESET_OPTIONS.find((option) => option.id === wechatStylePreset)
-    || WECHAT_STYLE_PRESET_OPTIONS[1]
+  const activeTypographyPreset = TYPOGRAPHY_PRESET_OPTIONS.find((option) => option.id === typographyPreset)
+    || TYPOGRAPHY_PRESET_OPTIONS[1]
+  const typographyStyleVariables = useMemo(
+    () => buildTypographyStyleVariables(typographyConfig),
+    [typographyConfig],
+  )
   const wechatSourceUrl = useMemo(() => {
     const currentSlug = normalizePostSlug(editSlug || slug)
     return currentSlug ? `https://${SITE_DISPLAY_URL}/${currentSlug}` : ''
@@ -1516,36 +1595,57 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
             </Tooltip>
 
             <Menu as="div" className="relative">
-              <Tooltip content={`公众号样式 · ${activeWechatStyle.label}`}>
+              <Tooltip content={`文章排版 · ${activeTypographyPreset.label}`}>
                 <MenuButton
                   as={UiIconButton}
-                  aria-label="公众号样式设置"
+                  aria-label="文章排版设置"
                   className="h-10 w-10"
                 >
-                  <Palette className="h-[1.1rem] w-[1.1rem]" />
+                  <SlidersHorizontal className="h-[1.1rem] w-[1.1rem]" />
                 </MenuButton>
               </Tooltip>
 
               <MenuItems
                 anchor="bottom end"
                 transition
-                className="theme-dropdown-panel z-50 mt-2 w-[22rem] overflow-hidden rounded-[1.1rem] p-1.5 outline-none transition duration-150 ease-out data-[closed]:translate-y-1 data-[closed]:opacity-0"
+                className="theme-dropdown-panel z-50 mt-2 w-[20rem] overflow-hidden rounded-[1.1rem] p-1.5 outline-none transition duration-150 ease-out data-[closed]:translate-y-1 data-[closed]:opacity-0"
               >
                 <div className="border-b border-[color-mix(in_srgb,var(--ui-line)_84%,transparent)] px-3 pb-2.5 pt-1.5">
-                  <div className="text-sm font-medium text-[var(--ui-ink)]">公众号样式</div>
+                  <div className="text-sm font-medium text-[var(--ui-ink)]">文章排版</div>
                   <div className="mt-0.5 text-xs leading-5 text-[var(--ui-muted)]">
-                    选择复制、预览和发布时共用的排版风格。
+                    编辑器、前台、公众号和导出共用。
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-1 border-b border-[color-mix(in_srgb,var(--ui-line)_84%,transparent)] p-1.5">
+                  {([
+                    ['article', '整篇文章'],
+                    ['block', '当前段落'],
+                  ] as const).map(([scope, label]) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      onClick={() => setTypographyScope(scope)}
+                      className={cx(
+                        'cursor-pointer rounded-[0.75rem] px-3 py-2 text-xs transition',
+                        typographyScope === scope
+                          ? 'bg-[var(--editor-soft)] font-medium text-[var(--editor-ink)]'
+                          : 'text-[var(--editor-muted)] hover:bg-[color-mix(in_srgb,var(--editor-line)_30%,transparent)]',
+                      )}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="max-h-[70vh] overflow-y-auto py-1">
-                  {WECHAT_STYLE_PRESET_OPTIONS.map((option) => {
-                    const active = option.id === wechatStylePreset
+                  {TYPOGRAPHY_PRESET_OPTIONS.map((option) => {
+                    const active = typographyScope === 'article' && option.id === typographyPreset
                     return (
                       <MenuItem key={option.id}>
                         <button
                           type="button"
-                          onClick={() => setWechatStylePreset(option.id)}
+                          onClick={() => handleTypographyPresetChange(option.id)}
                           className={cx(
                             'group flex w-full cursor-pointer items-start gap-3 rounded-[0.9rem] px-3 py-2.5 text-left transition',
                             active
@@ -1573,6 +1673,17 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
                       </MenuItem>
                     )
                   })}
+                </div>
+
+                <div className="border-t border-[color-mix(in_srgb,var(--ui-line)_84%,transparent)] p-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void openSettingsModal('theme')}
+                    className="flex w-full cursor-pointer items-center justify-between rounded-[0.75rem] px-3 py-2 text-xs text-[var(--editor-muted)] transition hover:bg-[color-mix(in_srgb,var(--editor-line)_30%,transparent)] hover:text-[var(--editor-ink)]"
+                  >
+                    高级排版设置
+                    <Settings className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </MenuItems>
             </Menu>
@@ -1811,10 +1922,12 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
           }}
         >
           <div
+            data-typography-preset={typographyPreset}
             className={cx(
-              'mx-auto w-full px-4 pb-8 sm:px-6',
+              'article-typography mx-auto w-full px-4 pb-8 sm:px-6',
               isFullscreen ? 'max-w-[960px] pt-14 sm:pt-16' : 'max-w-[780px] pt-10',
             )}
+            style={typographyStyleVariables}
           >
             {/* Title input */}
             <div
@@ -1994,6 +2107,7 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
                             category: initialData.category || 'AI',
                             tags: initialData.tags || [],
                             coverImage: initialData.cover_image || '',
+                            typographyPreset: normalizeTypographyPreset(initialData.typography_preset),
                           })
                         } else {
                           lastAutosaveSnapshotRef.current = null
@@ -2123,7 +2237,8 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
                       <WechatPreviewRail
                         title={title.trim() || '无标题'}
                         html={editorRef.current?.getHTML() || ''}
-                        stylePreset={wechatStylePreset}
+                        typographyPreset={typographyPreset}
+                        typographyConfig={typographyConfig}
                       />
                     ) : (
                       <div className="flex h-full items-center justify-center px-5 text-center text-sm text-[var(--editor-muted)]">
@@ -2144,7 +2259,8 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
           onClose={() => setWechatPublishOpen(false)}
           title={title.trim() || '无标题'}
           html={editorRef.current?.getHTML() || ''}
-          stylePreset={wechatStylePreset}
+          typographyPreset={typographyPreset}
+          typographyConfig={typographyConfig}
           defaultDigest={description}
           defaultSourceUrl={wechatSourceUrl}
           defaultCoverImageUrl={resolvePostCoverImage({
@@ -2289,9 +2405,11 @@ export function NovelEditor({ initialData, initialCategory }: NovelEditorProps =
                       initialDefaultTheme={settingsData.defaultTheme}
                       initialRuntimeCapabilities={settingsData.runtimeCapabilities}
                       initialHomeShortcutEnabled={settingsData.homeShortcutEnabled}
+                      initialTypographyPresets={settingsData.typographyPresets}
                       initialTab={settingsActiveTab}
                       selectedTab={settingsActiveTab}
                       onTabChange={(tabId) => setSettingsActiveTab(tabId as SettingsTabId)}
+                      onTypographyPresetsChange={setTypographyConfig}
                     />
                   </div>
                 ) : (

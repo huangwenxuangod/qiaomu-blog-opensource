@@ -9,6 +9,7 @@ import type {
   PostWithTags,
   StatsRow,
 } from '@/lib/repositories/types'
+import type { TypographyPresetId } from '@/lib/typography'
 
 // 获取文章列表（默认只返回已发布文章）
 export async function getPosts(
@@ -131,6 +132,7 @@ export async function createPost(
     password?: string | null
     is_hidden?: number
     cover_image?: string | null
+    typography_preset?: TypographyPresetId
   },
 ): Promise<number> {
   await ensureSchema(db)
@@ -138,8 +140,8 @@ export async function createPost(
 
   const result = await db
     .prepare(
-      `INSERT INTO posts (slug, title, content, html, description, category, tags, status, password, is_hidden, cover_image)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO posts (slug, title, content, html, description, category, tags, status, password, is_hidden, cover_image, typography_preset)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       data.slug,
@@ -153,6 +155,7 @@ export async function createPost(
       data.password ?? null,
       data.is_hidden ?? 0,
       data.cover_image ?? null,
+      data.typography_preset ?? 'standard',
     )
     .run()
 
@@ -185,6 +188,7 @@ export async function updatePostBySlug(
     is_pinned: number
     is_hidden: number
     cover_image: string | null
+    typography_preset: TypographyPresetId
   }>,
 ): Promise<void> {
   await ensureSchema(db)
@@ -218,6 +222,7 @@ export async function updatePost(
     is_pinned: number
     is_hidden: number
     cover_image: string | null
+    typography_preset: TypographyPresetId
   }>,
 ): Promise<void> {
   await ensureSchema(db)
@@ -286,6 +291,10 @@ export async function updatePost(
   if (data.cover_image !== undefined) {
     updates.push('cover_image = ?')
     values.push(data.cover_image)
+  }
+  if (data.typography_preset !== undefined) {
+    updates.push('typography_preset = ?')
+    values.push(data.typography_preset)
   }
 
   if (updates.length === 0) return

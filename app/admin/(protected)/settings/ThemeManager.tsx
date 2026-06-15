@@ -2,19 +2,55 @@
 
 import { useState } from 'react'
 import { FONT_PRESETS, THEME_OPTIONS, type BodyFont, type Theme } from '@/lib/appearance'
+import { UiButton, UiInput } from '@/components/ui/primitives'
+import {
+  DEFAULT_TYPOGRAPHY_PRESETS,
+  normalizeTypographyPresetsConfig,
+  TYPOGRAPHY_PRESET_OPTIONS,
+  type TypographyPresetId,
+  type TypographyPresetsConfig,
+  type TypographyPresetTokens,
+} from '@/lib/typography'
 
 interface Props {
   initialTheme: Theme
   initialFont: BodyFont
-  onSave: (values: { theme: Theme; font: BodyFont }) => void | Promise<void>
+  initialTypographyPresets?: string
+  onSave: (values: {
+    theme: Theme
+    font: BodyFont
+    typographyPresets: TypographyPresetsConfig
+  }) => void | Promise<void>
   saving: boolean
 }
 
-export function ThemeManager({ initialTheme, initialFont, onSave, saving }: Props) {
+export function ThemeManager({
+  initialTheme,
+  initialFont,
+  initialTypographyPresets = '',
+  onSave,
+  saving,
+}: Props) {
   const [selectedTheme, setSelectedTheme] = useState<Theme>(initialTheme)
   const [selectedFont, setSelectedFont] = useState<BodyFont>(initialFont)
+  const [typographyPresets, setTypographyPresets] = useState<TypographyPresetsConfig>(
+    normalizeTypographyPresetsConfig(initialTypographyPresets),
+  )
 
   const currentFont = FONT_PRESETS.find((preset) => preset.id === selectedFont) || FONT_PRESETS[0]
+  const updateTypographyToken = (
+    preset: TypographyPresetId,
+    key: keyof TypographyPresetTokens,
+    value: string,
+  ) => {
+    setTypographyPresets((current) => ({
+      ...current,
+      [preset]: {
+        ...current[preset],
+        [key]: value,
+      },
+    }) as unknown as TypographyPresetsConfig)
+  }
 
   return (
     <div className="space-y-6">
@@ -96,13 +132,68 @@ export function ThemeManager({ initialTheme, initialFont, onSave, saving }: Prop
         </p>
       )}
 
-      <button
-        onClick={() => void onSave({ theme: selectedTheme, font: selectedFont })}
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-base font-medium text-[var(--editor-ink)]">文章排版</h3>
+          <p className="mt-1 text-sm text-[var(--editor-muted)]">
+            编辑器、前台文章、公众号复制与导出共用这些参数。
+          </p>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {TYPOGRAPHY_PRESET_OPTIONS.map((option) => {
+            const tokens = typographyPresets[option.id]
+            return (
+              <section
+                key={option.id}
+                className="rounded-xl border border-[var(--editor-line)] bg-[var(--editor-panel)] p-4"
+              >
+                <div className="mb-3">
+                  <h4 className="text-sm font-medium text-[var(--editor-ink)]">{option.label}</h4>
+                  <p className="mt-0.5 text-xs leading-5 text-[var(--editor-muted)]">{option.description}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {([
+                    ['fontSize', '字号', 'px', '0.5'],
+                    ['lineHeight', '行高', '', '0.01'],
+                    ['letterSpacing', '字距', 'em', '0.01'],
+                    ['paragraphSpacing', '段距', 'em', '0.05'],
+                  ] as const).map(([key, label, unit, step]) => (
+                    <label key={key} className="text-xs text-[var(--editor-muted)]">
+                      <span className="mb-1.5 block">{label}{unit ? ` (${unit})` : ''}</span>
+                      <UiInput
+                        type="number"
+                        step={step}
+                        value={tokens[key]}
+                        onChange={(event) => updateTypographyToken(option.id, key, event.target.value)}
+                        className="ui-control h-10 px-3 text-[var(--editor-ink)]"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </section>
+            )
+          })}
+        </div>
+        <UiButton
+          type="button"
+          tone="quiet"
+          onClick={() => setTypographyPresets(DEFAULT_TYPOGRAPHY_PRESETS)}
+        >
+          恢复推荐值
+        </UiButton>
+      </div>
+
+      <UiButton
+        onClick={() => void onSave({
+          theme: selectedTheme,
+          font: selectedFont,
+          typographyPresets: normalizeTypographyPresetsConfig(typographyPresets),
+        })}
         disabled={saving}
-        className="rounded-lg bg-[var(--editor-accent)] px-4 py-2 text-sm font-medium text-[var(--editor-accent-ink)] hover:brightness-105 disabled:opacity-50"
+        tone="solid"
       >
         {saving ? '保存中...' : '保存主题管理设置'}
-      </button>
+      </UiButton>
     </div>
   )
 }

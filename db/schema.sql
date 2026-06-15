@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS posts (
   is_pinned INTEGER DEFAULT 0, -- 是否置顶
   is_hidden INTEGER DEFAULT 0, -- 是否隐藏（unlisted）
   cover_image TEXT, -- 封面图 URL
+  typography_preset TEXT NOT NULL DEFAULT 'standard',
   deleted_at INTEGER, -- 软删除时间戳，NULL 表示未删除
   published_at INTEGER DEFAULT (strftime('%s', 'now')),
   updated_at INTEGER DEFAULT (strftime('%s', 'now')),

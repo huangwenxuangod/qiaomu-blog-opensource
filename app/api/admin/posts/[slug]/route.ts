@@ -4,6 +4,7 @@ import { invalidatePublicContentCache } from '@/lib/cache'
 import { buildAutoDescription, normalizePostSlug } from '@/lib/post-utils'
 import { getRouteContextWithDb, jsonError, jsonOk, parseJsonBody } from '@/lib/server/route-helpers'
 import type { NextRequest } from 'next/server'
+import { normalizeTypographyPreset, type TypographyPresetId } from '@/lib/typography'
 
 async function checkAuth(req: NextRequest): Promise<boolean> {
   const token = req.cookies.get(COOKIE_NAME)?.value
@@ -56,6 +57,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       cover_image,
       tags,
       description,
+      typography_preset,
     } = await parseJsonBody<{
       slug?: string
       title?: string
@@ -69,6 +71,7 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       cover_image?: string | null
       tags?: string[]
       description?: string
+      typography_preset?: TypographyPresetId
     }>(req)
     const nextSlug = typeof nextSlugRaw === 'string' ? normalizePostSlug(nextSlugRaw) : ''
     const normalizedDescription = typeof description === 'string' && description.trim()
@@ -88,6 +91,9 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
       cover_image,
       tags,
       description: normalizedDescription,
+      typography_preset: typography_preset === undefined
+        ? undefined
+        : normalizeTypographyPreset(typography_preset),
     })
 
     // 清除 KV 缓存（失败不影响保存结果）

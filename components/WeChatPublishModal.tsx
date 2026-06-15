@@ -10,7 +10,11 @@ import {
   buildWechatBridgeCoverImageUrl,
   extractFirstWechatBridgeCoverImageUrl,
 } from '@/lib/wechat/copy'
-import type { WechatStylePresetId } from '@/lib/wechat/style-presets'
+import {
+  DEFAULT_TYPOGRAPHY_PRESETS,
+  type TypographyPresetId,
+  type TypographyPresetsConfig,
+} from '@/lib/typography'
 import {
   WECHAT_DEFAULT_AUTHOR,
   WECHAT_DEFAULT_NEED_OPEN_COMMENT,
@@ -27,7 +31,8 @@ interface WeChatPublishModalProps {
   onClose: () => void
   title: string
   html: string
-  stylePreset?: WechatStylePresetId
+  typographyPreset?: TypographyPresetId
+  typographyConfig?: TypographyPresetsConfig
   defaultDigest?: string
   defaultSourceUrl?: string
   defaultCoverImageUrl?: string
@@ -38,7 +43,8 @@ export function WeChatPublishModal({
   onClose,
   title,
   html,
-  stylePreset = 'default',
+  typographyPreset = 'standard',
+  typographyConfig = DEFAULT_TYPOGRAPHY_PRESETS,
   defaultDigest = '',
   defaultSourceUrl = '',
   defaultCoverImageUrl = '',
@@ -108,7 +114,12 @@ export function WeChatPublishModal({
     setSubmitting(true)
 
     try {
-      const { normalizedTitle, exportedHtml } = await buildWechatBridgeArticleExport(title, html, stylePreset)
+      const { normalizedTitle, exportedHtml } = await buildWechatBridgeArticleExport(
+        title,
+        html,
+        typographyPreset,
+        typographyConfig,
+      )
       const finalCoverUrl =
         buildWechatBridgeCoverImageUrl(coverImageUrl) ||
         buildWechatBridgeCoverImageUrl(defaultCoverImageUrl) ||

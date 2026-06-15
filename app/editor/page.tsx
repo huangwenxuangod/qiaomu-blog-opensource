@@ -48,6 +48,7 @@ export default async function EditorPage({
     tags?: string[]
     description?: string | null
     cover_image?: string | null
+    typography_preset?: string
   } | undefined
 
   if (edit) {
@@ -66,6 +67,7 @@ export default async function EditorPage({
           tags: post.tags,
           description: post.description,
           cover_image: post.cover_image,
+          typography_preset: post.typography_preset,
         }
       }
     }

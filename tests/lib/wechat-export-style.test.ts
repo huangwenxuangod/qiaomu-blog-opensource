@@ -4,6 +4,7 @@ import {
   normalizeWechatExportHtml,
   type WechatExportStyleTokens,
 } from '@/lib/wechat/export-style'
+import { DEFAULT_TYPOGRAPHY_PRESETS } from '@/lib/typography'
 
 const TOKENS: WechatExportStyleTokens = {
   background: '#f5f4ed',
@@ -72,23 +73,14 @@ describe('wechat export helpers', () => {
     expect(css).not.toContain(TOKENS.codeBackground)
   })
 
-  it('removes exaggerated paragraph letter-spacing from body presets', () => {
-    const defaultCss = buildWechatExportCss(TOKENS, 'default')
-    const nytCss = buildWechatExportCss(TOKENS, 'nyt')
-    const ftCss = buildWechatExportCss(TOKENS, 'financial-times')
-    const extractParagraphRule = (css: string) => css.match(/\.wechat-export-content p \{[\s\S]*?\n\}/)?.[0] || ''
+  it('uses the shared article preset and keeps block overrides exportable', () => {
+    const css = buildWechatExportCss(TOKENS, 'relaxed', DEFAULT_TYPOGRAPHY_PRESETS)
 
-    const defaultParagraphRule = extractParagraphRule(defaultCss)
-    const nytParagraphRule = extractParagraphRule(nytCss)
-    const ftParagraphRule = extractParagraphRule(ftCss)
-
-    expect(defaultParagraphRule).toContain('letter-spacing: 0;')
-    expect(defaultParagraphRule).not.toContain('letter-spacing: 0.03em;')
-
-    expect(nytParagraphRule).toContain('letter-spacing: 0;')
-    expect(nytParagraphRule).not.toContain('letter-spacing: 0.02em;')
-
-    expect(ftParagraphRule).toContain('letter-spacing: 0;')
-    expect(ftParagraphRule).not.toContain('letter-spacing: 0.015em;')
+    expect(css).toContain('font-size: 17px;')
+    expect(css).toContain('line-height: 1.96;')
+    expect(css).toContain('letter-spacing: 0.01em;')
+    expect(css).toContain('margin: 1.45em 0;')
+    expect(css).toContain('[data-typography-preset="compact"]')
+    expect(css).toContain('[data-typography-preset="wechat"]')
   })
 })

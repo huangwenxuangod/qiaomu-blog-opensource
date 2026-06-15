@@ -27,6 +27,7 @@ export function NovelEditorClient(props: {
     tags?: string[]
     description?: string | null
     cover_image?: string | null
+    typography_preset?: string
   }
   skipDraftRestore?: boolean
   initialCategory?: string

@@ -299,8 +299,9 @@ select:focus-visible {
   min-height: calc(100vh - 12rem);
   padding: 3.4rem 1.25rem 4.5rem;
   color: var(--editor-ink);
-  font-size: 1.04rem;
-  line-height: 2;
+  font-size: var(--article-font-size, 17px);
+  line-height: var(--article-line-height, 1.86);
+  letter-spacing: var(--article-letter-spacing, 0);
   outline: none;
   caret-color: var(--editor-accent);
 }
@@ -627,6 +628,9 @@ select:focus-visible {
 
 :is(.novel-prose, .rich-content) {
   color: var(--article-body);
+  font-size: var(--article-font-size, 17px);
+  line-height: var(--article-line-height, 1.86);
+  letter-spacing: var(--article-letter-spacing, 0);
 }
 
 :is(.novel-prose, .rich-content) > :first-child {
@@ -634,7 +638,47 @@ select:focus-visible {
 }
 
 :is(.novel-prose, .rich-content) > * + * {
-  margin-top: 1.15em;
+  margin-top: var(--article-paragraph-spacing, 1.15em);
+}
+
+.article-typography,
+.article-typography[data-typography-preset="standard"] {
+  --article-font-size: var(--typography-standard-font-size, 17px);
+  --article-line-height: var(--typography-standard-line-height, 1.86);
+  --article-letter-spacing: var(--typography-standard-letter-spacing, 0em);
+  --article-paragraph-spacing: var(--typography-standard-paragraph-spacing, 1.15em);
+}
+
+.article-typography[data-typography-preset="compact"],
+.article-typography [data-typography-preset="compact"] {
+  --article-font-size: var(--typography-compact-font-size, 16px);
+  --article-line-height: var(--typography-compact-line-height, 1.68);
+  --article-letter-spacing: var(--typography-compact-letter-spacing, 0em);
+  --article-paragraph-spacing: var(--typography-compact-paragraph-spacing, 0.9em);
+}
+
+.article-typography[data-typography-preset="relaxed"],
+.article-typography [data-typography-preset="relaxed"] {
+  --article-font-size: var(--typography-relaxed-font-size, 17px);
+  --article-line-height: var(--typography-relaxed-line-height, 1.96);
+  --article-letter-spacing: var(--typography-relaxed-letter-spacing, 0.01em);
+  --article-paragraph-spacing: var(--typography-relaxed-paragraph-spacing, 1.45em);
+}
+
+.article-typography[data-typography-preset="wechat"],
+.article-typography [data-typography-preset="wechat"] {
+  --article-font-size: var(--typography-wechat-font-size, 17px);
+  --article-line-height: var(--typography-wechat-line-height, 1.78);
+  --article-letter-spacing: var(--typography-wechat-letter-spacing, 0em);
+  --article-paragraph-spacing: var(--typography-wechat-paragraph-spacing, 1.45em);
+}
+
+.article-typography [data-typography-preset] {
+  font-size: var(--article-font-size);
+  line-height: var(--article-line-height);
+  letter-spacing: var(--article-letter-spacing);
+  margin-top: var(--article-paragraph-spacing);
+  margin-bottom: var(--article-paragraph-spacing);
 }
 
 :is(.novel-prose, .rich-content) h1,
@@ -982,8 +1026,6 @@ select:focus-visible {
 
 .rich-content {
   max-width: none;
-  font-size: 1rem;
-  line-height: 1.85;
   font-family: var(--body-font, inherit);
 }
 
@@ -991,28 +1033,12 @@ select:focus-visible {
   font-family: var(--body-font, Georgia, "Noto Serif SC", serif);
 }
 
-@media (min-width: 640px) {
-  .rich-content {
-    font-size: 1.06rem;
-    line-height: 1.9;
-  }
-}
-
 /* ── 楷体排版优化 ── */
 /* 楷体笔画细、字形小，需要更大字号和行高 */
 /* 标题改用系统黑体做粗体，与楷体正文形成反差 */
 
 [data-font="kaiti"] .rich-content {
-  font-size: 1.08rem;
-  line-height: 2;
-  letter-spacing: 0.02em;
-}
-
-@media (min-width: 640px) {
-  [data-font="kaiti"] .rich-content {
-    font-size: 1.14rem;
-    line-height: 2.05;
-  }
+  font-family: var(--body-font, inherit);
 }
 
 /* 楷体模式下标题用系统黑体，不用楷体 */
