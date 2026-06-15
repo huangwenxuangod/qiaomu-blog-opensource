@@ -203,18 +203,12 @@ export default class QmblogPublisher extends Plugin {
     let uploadedCount = 0;
     let failedCount = 0;
 
-    // 3. Upload local files
-    for (const ref of localRefs) {
-      uploadedCount++;
-      if (totalFiles > 0) {
-        onProgress(`正在上传文件 ${uploadedCount}/${totalFiles}...`);
-      }
-
+    // 3. Upload local files (parallel)
+    const localUploadTasks = localRefs.map(async (ref) => {
       try {
         const fileData = await this.readLocalFile(ref.resolvedPath);
         if (!fileData) {
-          failedCount++;
-          continue;
+          return { ref, ok: false };
         }
 
         const result = await this.uploadFile(
@@ -225,32 +219,42 @@ export default class QmblogPublisher extends Plugin {
 
         if (result.success && result.url) {
           const fullUrl = this.toAbsoluteUrl(result.url);
-          processedContent = processedContent.split(ref.original).join(
-            ref.isWikilink
+          return {
+            ref,
+            ok: true,
+            replacement: ref.isWikilink
               ? `![${fileData.name}](${fullUrl})`
-              : ref.original.replace(ref.src, fullUrl)
-          );
-        } else {
-          failedCount++;
+              : ref.original.replace(ref.src, fullUrl),
+          };
         }
+        return { ref, ok: false };
       } catch (e) {
         console.error(`Failed to upload local file: ${ref.src}`, e);
+        return { ref, ok: false };
+      }
+    });
+
+    if (localUploadTasks.length > 0) {
+      onProgress(`正在并行上传 ${localUploadTasks.length} 个本地文件...`);
+    }
+
+    const localResults = await Promise.allSettled(localUploadTasks);
+    uploadedCount += localRefs.length;
+
+    for (const settled of localResults) {
+      if (settled.status === "fulfilled" && settled.value.ok) {
+        processedContent = processedContent.split(settled.value.ref.original).join(settled.value.replacement);
+      } else {
         failedCount++;
       }
     }
 
-    // 4. Re-upload remote images
-    for (const ref of remoteRefs) {
-      uploadedCount++;
-      if (totalFiles > 0) {
-        onProgress(`正在上传文件 ${uploadedCount}/${totalFiles}...`);
-      }
-
+    // 4. Re-upload remote images (parallel)
+    const remoteUploadTasks = remoteRefs.map(async (ref) => {
       try {
         const downloaded = await this.downloadRemoteImage(ref.src);
         if (!downloaded) {
-          failedCount++;
-          continue;
+          return { ref, ok: false };
         }
 
         const result = await this.uploadFile(
@@ -261,12 +265,26 @@ export default class QmblogPublisher extends Plugin {
 
         if (result.success && result.url) {
           const fullUrl = this.toAbsoluteUrl(result.url);
-          processedContent = processedContent.split(ref.src).join(fullUrl);
-        } else {
-          failedCount++;
+          return { ref, ok: true, replacement: fullUrl };
         }
+        return { ref, ok: false };
       } catch (e) {
         console.error(`Failed to re-upload remote image: ${ref.src}`, e);
+        return { ref, ok: false };
+      }
+    });
+
+    if (remoteUploadTasks.length > 0) {
+      onProgress(`正在并行上传 ${remoteUploadTasks.length} 个远程图片...`);
+    }
+
+    const remoteResults = await Promise.allSettled(remoteUploadTasks);
+    uploadedCount += remoteRefs.length;
+
+    for (const settled of remoteResults) {
+      if (settled.status === "fulfilled" && settled.value.ok) {
+        processedContent = processedContent.split(settled.value.ref.src).join(settled.value.replacement);
+      } else {
         failedCount++;
       }
     }
